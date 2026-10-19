@@ -1,0 +1,215 @@
+[
+    {
+        "id": "v19b_tab",
+        "type": "tab",
+        "label": "Вариант 19 — проверка",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "v19b_inject",
+        "type": "inject",
+        "z": "v19b_tab",
+        "name": "Загрузить лог",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "payload": "",
+        "payloadType": "date",
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "v19b_read"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_watch",
+        "type": "watch",
+        "z": "v19b_tab",
+        "name": "Следить за логом",
+        "files": "C:/Users/10240815/tools/suasova/data/log.txt",
+        "recursive": false,
+        "x": 150,
+        "y": 180,
+        "wires": [
+            [
+                "v19b_read"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_read",
+        "type": "file in",
+        "z": "v19b_tab",
+        "name": "Прочитать log.txt",
+        "filename": "C:/Users/10240815/tools/suasova/data/log.txt",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 390,
+        "y": 140,
+        "wires": [
+            [
+                "v19b_function",
+                "v19b_logdebug"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_logdebug",
+        "type": "debug",
+        "z": "v19b_tab",
+        "name": "Содержимое лога",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 650,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "v19b_function",
+        "type": "function",
+        "z": "v19b_tab",
+        "name": "Лог в SQL + FAULT",
+        "func": "const T = 3;\nconst ranges = {s1:[0,100], s2:[-20,80], s3:[2,400]};\nconst text = String(msg.payload).replace(/^\\uFEFF/, '');\nconst sql = [];\n\nfor (const line of text.split(/\\r?\\n/)) {\n    const parts = line.trim().split(/\\s+/);\n    const f = {};\n    for (const part of parts.slice(1)) {\n        const [key, value] = part.split('=');\n        f[key] = value;\n    }\n    const n = Number(f.n);\n    if (!Number.isInteger(n) || n < 1) continue;\n    const t = n * T;\n\n    if (parts[0] === 'DATA') {\n        for (const s of ['s1','s2','s3']) {\n            if (!f[s]) continue;\n            const v = Number(f[s]);\n            if (!Number.isFinite(v)) continue;\n            sql.push(`INSERT INTO readings(n,t_s,sensor,value) VALUES(${n},${t},'${s}',${v});`);\n            if (v < ranges[s][0] || v > ranges[s][1]) {\n                sql.push(`INSERT INTO events(n,t_s,type,message) VALUES(${n},${t},'FAULT','датчик ${s} вне диапазона');`);\n            }\n        }\n    }\n\n    if (parts[0] === 'EVENT' && ['THRESHOLD','NORMAL'].includes(f.type)) {\n        sql.push(`INSERT INTO events(n,t_s,type,message) VALUES(${n},${t},'${f.type}','');`);\n    }\n}\n\nif (!sql.length) {\n    node.warn('Нет строк DATA или EVENT для загрузки');\n    return null;\n}\n\nconst head = \"BEGIN;\\nDELETE FROM readings;\\nDELETE FROM events;\\nDELETE FROM sqlite_sequence WHERE name IN ('readings','events');\\n\";\nreturn [null, {payload: head + sql.join('\\n') + '\\nCOMMIT;\\n'}];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 650,
+        "y": 180,
+        "wires": [
+            [],
+            [
+                "v19b_write"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_write",
+        "type": "file",
+        "z": "v19b_tab",
+        "name": "Записать load.sql",
+        "filename": "C:/Users/10240815/tools/suasova/db/load.sql",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 900,
+        "y": 180,
+        "wires": [
+            [
+                "v19b_exec"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_exec",
+        "type": "exec",
+        "z": "v19b_tab",
+        "command": "\"C:/Users/10240815/tools/sqlite/sqlite3.exe\" \"C:/Users/10240815/tools/suasova/db/variant.db\" \".read C:/Users/10240815/tools/suasova/db/schema.sql\" \".read C:/Users/10240815/tools/suasova/db/load.sql\" \"SELECT 'READINGS', COUNT(*) FROM readings; SELECT 'EVENTS', COUNT(*) FROM events;\"",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": true,
+        "oldrc": false,
+        "name": "Загрузить в SQLite",
+        "x": 900,
+        "y": 300,
+        "wires": [
+            [
+                "v19b_result"
+            ],
+            [
+                "v19b_errorconvert"
+            ],
+            [
+                "v19b_status"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_errorconvert",
+        "type": "function",
+        "z": "v19b_tab",
+        "name": "Ошибка в текст",
+        "func": "msg.payload = Buffer.isBuffer(msg.payload) ? msg.payload.toString('utf8') : String(msg.payload);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1150,
+        "y": 320,
+        "wires": [
+            [
+                "v19b_errors"
+            ]
+        ]
+    },
+    {
+        "id": "v19b_result",
+        "type": "debug",
+        "z": "v19b_tab",
+        "name": "Количество записей",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1160,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "v19b_errors",
+        "type": "debug",
+        "z": "v19b_tab",
+        "name": "Ошибки SQLite — текст",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1400,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "v19b_status",
+        "type": "debug",
+        "z": "v19b_tab",
+        "name": "Код завершения",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1150,
+        "y": 380,
+        "wires": []
+    }
+]
