@@ -6,7 +6,7 @@
 (MQ2 (пары, 0–100 %)	NTC (температура)	US (расстояние до уровня жидкости)	реле (вентиляция)	синий, 10 мА / 3 с	пары > 30 %)
 
 ## Ссылка на проект Wokwi
-(Simulate this project on https://wokwi.com
+([Simulate this project on https://wokwi.com](https://wokwi.com/projects/478294872694667265)
 )
 
 ## Файлы
